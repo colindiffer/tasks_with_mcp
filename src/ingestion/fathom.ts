@@ -1,63 +1,73 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { withMcp } from '../mcp/clients.js';
+import { getFathomCursor, setFathomCursor } from '../state/store.js';
 import { logger } from '../utils/logger.js';
 import type { RawMessage } from '../types/index.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const QUEUE_FILE = path.resolve(__dirname, '../../state/fathom-queue.json');
-
-interface FathomQueueItem {
-  id: string;
-  receivedAt: string;
-  payload: {
-    meeting_title?: string;
-    summary?: string;
-    transcript?: string;
-    attendees?: { name: string; email?: string }[];
-    host?: { name: string; email?: string };
-    meeting_url?: string;
-  };
+interface FathomMeeting {
+  title: string;
+  date: string;
+  url?: string;
+  attendees?: { name?: string; email?: string }[];
+  recorded_by?: { name?: string; email?: string };
+  summary?: string;
+  action_items?: string;
 }
 
-export function drainQueue(): RawMessage[] {
-  if (!fs.existsSync(QUEUE_FILE)) return [];
+interface FathomListResponse {
+  meetings: FathomMeeting[];
+  total_found: number;
+  has_more: boolean;
+}
 
-  let items: FathomQueueItem[] = [];
-  try {
-    items = JSON.parse(fs.readFileSync(QUEUE_FILE, 'utf-8')) as FathomQueueItem[];
-  } catch {
-    return [];
-  }
+export async function fetchNewMeetings(): Promise<RawMessage[]> {
+  return withMcp('fathom', async (call) => {
+    const cursor = getFathomCursor();
 
-  if (items.length === 0) return [];
+    // Default to 7 days ago on first run so we don't pull all history
+    const createdAfter = cursor || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  // Clear the queue file now — these items are being processed
-  fs.writeFileSync(QUEUE_FILE, '[]', 'utf-8');
+    const result = await call('list_meetings', {
+      created_after: createdAfter,
+      include_transcript: false,
+      limit: 20,
+    }) as FathomListResponse;
 
-  const messages: RawMessage[] = items.map(item => {
-    const p = item.payload;
-    const host = p.host?.name ?? 'Unknown';
-    const attendees = (p.attendees ?? []).map(a => a.name).join(', ');
-    const content = [
-      p.meeting_title ? `Meeting: ${p.meeting_title}` : '',
-      `Attendees: ${attendees || 'Unknown'}`,
-      '',
-      p.summary ? `Summary:\n${p.summary}` : '',
-      p.transcript ? `Transcript:\n${p.transcript}` : '',
-    ].filter(Boolean).join('\n');
+    const meetings = result.meetings ?? [];
+    if (meetings.length === 0) {
+      logger.info({ action: 'fathom_fetched', count: 0 }, 'No new Fathom meetings');
+      return [];
+    }
 
-    return {
-      id: item.id,
-      source: 'fathom' as const,
-      receivedAt: new Date(item.receivedAt),
-      senderName: host,
-      channelOrFolder: 'Meeting',
-      content,
-      permalink: p.meeting_url,
-    };
+    let newLatestDate: string | undefined;
+    const messages: RawMessage[] = meetings.map(meeting => {
+      const host = meeting.recorded_by?.name ?? 'Unknown';
+      const attendees = (meeting.attendees ?? [])
+        .map(a => a.name ?? a.email ?? 'Unknown')
+        .join(', ');
+
+      const content = [
+        meeting.title ? `Meeting: ${meeting.title}` : '',
+        `Attendees: ${attendees || 'Unknown'}`,
+        '',
+        meeting.summary ? `Summary:\n${meeting.summary}` : '',
+        meeting.action_items ? `Action items:\n${meeting.action_items}` : '',
+      ].filter(Boolean).join('\n');
+
+      if (!newLatestDate || meeting.date > newLatestDate) newLatestDate = meeting.date;
+
+      return {
+        id: meeting.date + (meeting.title ?? ''),
+        source: 'fathom' as const,
+        receivedAt: new Date(meeting.date),
+        senderName: host,
+        channelOrFolder: 'Meeting',
+        content,
+        permalink: meeting.url,
+      };
+    });
+
+    if (newLatestDate) setFathomCursor(newLatestDate);
+    logger.info({ action: 'fathom_fetched', count: messages.length }, 'Fathom meetings fetched');
+    return messages;
   });
-
-  logger.info({ action: 'fathom_drained', count: messages.length }, 'Fathom queue drained');
-  return messages;
 }

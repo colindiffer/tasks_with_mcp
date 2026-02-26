@@ -1,69 +1,89 @@
 # Progress Log
 
-## Status: MCP servers connected, pipeline code needs rebuilding
+## Status: Pipeline running — Slack needs user token upgrade
 
 ---
 
-## What's done
+## What's working
 
 ### MCP Servers — all three connected ✅
 
-| Server | Status | Config |
-|--------|--------|--------|
-| Fathom | ✅ connected | `node C:/Users/ColinDiffer/mcp-fathom-server/dist/index.js` |
-| Trello | ✅ connected | `cmd /c npx -y @delorenj/mcp-server-trello` |
-| Slack  | ✅ connected | `https://mcp.slack.com/mcp` (OAuth) |
+| Server | MCP Package | Auth |
+|--------|-------------|------|
+| Slack  | `mcp-server-slack` (local stdio) | `SLACK_ACCESS_TOKEN` |
+| Trello | `@delorenj/mcp-server-trello` (local stdio) | `TRELLO_API_KEY` + `TRELLO_TOKEN` |
+| Fathom | `node .../mcp-fathom-server/dist/index.js` (local stdio) | `FATHOM_API_KEY` |
 
-All registered in `C:\Users\ColinDiffer\.claude.json` under project `C:/Users/ColinDiffer/internal_projects/tasks_with_mcp`.
+### Pipeline architecture ✅
+```
+cron → pipeline/runner.ts
+  ├── MCP (mcp-server-slack)          → fetch Slack messages
+  ├── MCP (mcp-fathom-server)         → fetch meetings (polling, not webhooks)
+  ├── Anthropic API                   → classify each message
+  ├── MCP (@delorenj/mcp-server-trello) → dedup check + create card
+  └── state/cursors.json              → cursor tracking per source
+```
 
-### Credentials stored in .claude.json (not .env)
-- `TRELLO_API_KEY` + `TRELLO_TOKEN` — non-expiring token
-- `FATHOM_API_KEY` — in MCP config
-- Slack — OAuth token managed by Claude Code automatically
+### Trello board configured ✅
+- **Board**: Analytics & Paid Media Tagging Ticket Workflow
+- **Board ID**: `66336c384861f3b858dd7371`
+- **AI Intake list ID**: `69a0c736ec34ab519b0d42b2`
 
-### Fathom MCP server
-- Cloned to `C:\Users\ColinDiffer\mcp-fathom-server\`
-- Built (`npm install && npm run build`)
-- Exposes two tools: `list_meetings`, `search_meetings`
-- Source: https://github.com/sourcegate/mcp-fathom-server
-
-### Trello MCP server
-- Runs via `npx @delorenj/mcp-server-trello` (no local clone needed)
-- Source: https://github.com/delorenj/mcp-server-trello
-- Note: Windows requires `cmd /c` wrapper — already configured
-
-### TypeScript project scaffolded
-- All source files in `src/` — types, config, ingestion, classification, trello, pipeline, webhook
-- **BUT**: currently written for direct API calls (Slack Web API, Trello REST)
-- Needs to be **rewritten to call MCP tools** via Anthropic API tool_use pattern
+### .env credentials status
+| Variable | Status |
+|----------|--------|
+| `ANTHROPIC_API_KEY` | ✅ set |
+| `TRELLO_API_KEY` | ✅ set |
+| `TRELLO_TOKEN` | ✅ set |
+| `TRELLO_BOARD_ID` | ✅ `66336c384861f3b858dd7371` |
+| `TRELLO_INTAKE_LIST_ID` | ✅ `69a0c736ec34ab519b0d42b2` |
+| `FATHOM_API_KEY` | ✅ set — fetching meetings successfully |
+| `SLACK_ACCESS_TOKEN` | ⚠️ bot token — needs upgrading to user token |
+| `SLACK_CHANNEL_IDS` | ⚠️ placeholder values — will be removed after Slack upgrade |
 
 ---
 
 ## What's next
 
-### Immediate: rebuild the pipeline to use MCP tools
+### 🔴 Step 1: Upgrade Slack to user token (for DMs + @mentions)
 
-The architecture has changed from "standalone service with direct APIs" to "Claude-orchestrated pipeline using MCP tools". The `src/` code needs to be replaced with a new approach:
+The current `SLACK_ACCESS_TOKEN` is a bot token (`xoxb-`). Bot tokens cannot access
+personal DMs or Slack's search API. A user token (`xoxp-`) is needed.
 
-1. **Trigger**: `src/index.ts` — keep the cron scheduler
-2. **Ingestion**: instead of calling Slack/Trello APIs directly, invoke Claude (Anthropic API) with MCP tools available — Claude calls `slack_list_channels`, `slack_get_channel_messages` etc.
-3. **Classification**: Claude does this natively as part of the same agent loop
-4. **Output**: Claude calls `trello_add_card_to_list` via the Trello MCP tool
+**Steps:**
+1. Go to https://api.slack.com/apps — open your Slack app
+2. Go to **OAuth & Permissions** → scroll to **User Token Scopes**
+3. Add these scopes:
+   - `channels:history`, `channels:read`
+   - `groups:history`, `groups:read`
+   - `im:history`, `im:read`     ← direct messages
+   - `mpim:history`, `mpim:read` ← group DMs
+   - `search:read`               ← @mention search
+   - `users:read`
+4. Click **Reinstall App** at the top of the OAuth & Permissions page
+5. Copy the **User OAuth Token** (starts `xoxp-...`)
+6. Paste into `.env`: `SLACK_ACCESS_TOKEN=xoxp-...`
 
-This means the pipeline becomes a **Claude agent invocation** rather than direct API calls.
+### 🔴 Step 2: Update Slack ingestion for DMs + mentions
 
-### Slack — find the right channel IDs
-- Need to identify which Slack channels to monitor
-- Use the Slack MCP `list_channels` tool to discover them
+Once the user token is in place, update `src/ingestion/slack.ts` to:
+- **Mentions**: use `slack_search_messages` with query `@colin` (or `<@USERID>`)
+  — catches all mentions across every channel, no hardcoded channel list
+- **DMs**: use `slack_list_channels` with `types: "im,mpim"` to auto-discover
+  all DM conversations, then `slack_get_messages` on each
 
-### Trello — find the AI Intake list ID
-- Use Trello MCP `list_boards` then `get_lists` to get the ID of the "AI Intake" list
-- Add `TRELLO_INTAKE_LIST_ID` to the MCP config or a config file
+Also remove `SLACK_CHANNEL_IDS` from `.env` and `src/config/index.ts` — no longer needed.
 
-### Outlook — not yet started
-- No MCP available
-- Options: Microsoft Graph API (Azure app needed) or skip for now
-- The old `fathom-pipeline` project at `C:\Users\ColinDiffer\app\fathom-pipeline` has Azure setup notes in its README but is untested
+### 🟡 Step 3: Run full end-to-end test
+```
+npm run dev
+```
+Expected: Slack messages + DMs fetched, Fathom meetings classified, Trello cards
+created in AI Intake list.
+
+### ⚪ Step 4: Outlook (optional / later)
+No Outlook MCP exists yet. The pipeline gracefully skips it if `AZURE_TENANT_ID`
+is not set. Pick up if/when needed.
 
 ---
 
@@ -71,8 +91,11 @@ This means the pipeline becomes a **Claude agent invocation** rather than direct
 
 | What | Where |
 |------|-------|
-| MCP config | `C:\Users\ColinDiffer\.claude.json` → projects → tasks_with_mcp → mcpServers |
+| MCP client manager | `src/mcp/clients.ts` |
+| Slack ingestion | `src/ingestion/slack.ts` |
+| Fathom ingestion | `src/ingestion/fathom.ts` |
+| Classification prompt | `src/classification/prompt.ts` |
+| Cursor state | `state/cursors.json` (gitignored) |
+| Credentials | `.env` (gitignored) |
 | Fathom MCP server | `C:\Users\ColinDiffer\mcp-fathom-server\` |
-| This project | `C:\Users\ColinDiffer\internal_projects\tasks_with_mcp\` |
-| TypeScript source | `src/` — needs rewrite for MCP-based approach |
 | Operating rules | `README.md` |

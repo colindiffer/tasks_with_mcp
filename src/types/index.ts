@@ -60,6 +60,6 @@ export interface CursorState {
     lastReceivedDateTime: string; // ISO datetime
   };
   fathom: {
-    lastProcessedWebhookId: string;
+    lastProcessedMeetingDate: string; // ISO datetime of most recent processed meeting
   };
 }

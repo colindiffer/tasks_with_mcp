@@ -50,6 +50,11 @@ interface GraphResponse {
 }
 
 export async function fetchNewMessages(): Promise<RawMessage[]> {
+  if (!config.outlook.tenantId || !config.outlook.clientId) {
+    logger.debug({ action: 'outlook_skip' }, 'Outlook not configured — skipping');
+    return [];
+  }
+
   const since = getOutlookCursor();
   const messages: RawMessage[] = [];
   let newLatest: string | undefined;

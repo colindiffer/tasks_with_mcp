@@ -1,6 +1,6 @@
 import { fetchNewMessages as fetchSlack } from '../ingestion/slack.js';
 import { fetchNewMessages as fetchOutlook } from '../ingestion/outlook.js';
-import { drainQueue as drainFathom } from '../ingestion/fathom.js';
+import { fetchNewMeetings as fetchFathom } from '../ingestion/fathom.js';
 import { classify } from '../classification/classifier.js';
 import { check as dedupCheck, invalidateCache } from '../dedup/deduplicator.js';
 import { createCard } from '../trello/client.js';
@@ -78,7 +78,7 @@ export async function run(): Promise<void> {
   const sources: Array<{ name: string; fetch: () => Promise<RawMessage[]> | RawMessage[] }> = [
     { name: 'slack', fetch: fetchSlack },
     { name: 'outlook', fetch: fetchOutlook },
-    { name: 'fathom', fetch: drainFathom },
+    { name: 'fathom', fetch: fetchFathom },
   ];
 
   for (const source of sources) {

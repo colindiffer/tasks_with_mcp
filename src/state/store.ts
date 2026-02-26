@@ -9,7 +9,7 @@ const STATE_FILE = path.resolve(__dirname, '../../state/cursors.json');
 const DEFAULT_STATE: CursorState = {
   slack: { channels: {} },
   outlook: { lastReceivedDateTime: new Date(0).toISOString() },
-  fathom: { lastProcessedWebhookId: '' },
+  fathom: { lastProcessedMeetingDate: '' },
 };
 
 function load(): CursorState {
@@ -47,11 +47,11 @@ export function setOutlookCursor(dateTime: string): void {
 }
 
 export function getFathomCursor(): string {
-  return load().fathom.lastProcessedWebhookId;
+  return load().fathom.lastProcessedMeetingDate;
 }
 
-export function setFathomCursor(webhookId: string): void {
+export function setFathomCursor(meetingDate: string): void {
   const state = load();
-  state.fathom.lastProcessedWebhookId = webhookId;
+  state.fathom.lastProcessedMeetingDate = meetingDate;
   save(state);
 }

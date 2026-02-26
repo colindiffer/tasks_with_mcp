@@ -10,18 +10,18 @@ function optional_env(key: string, fallback: string): string {
 
 export const config = {
   slack: {
-    botToken: require_env('SLACK_BOT_TOKEN'),
+    accessToken: require_env('SLACK_ACCESS_TOKEN'),
     channelIds: require_env('SLACK_CHANNEL_IDS').split(',').map(id => id.trim()),
   },
   outlook: {
-    tenantId: require_env('AZURE_TENANT_ID'),
-    clientId: require_env('AZURE_CLIENT_ID'),
-    clientSecret: require_env('AZURE_CLIENT_SECRET'),
-    userEmail: require_env('OUTLOOK_USER_EMAIL'),
+    tenantId: optional_env('AZURE_TENANT_ID', ''),
+    clientId: optional_env('AZURE_CLIENT_ID', ''),
+    clientSecret: optional_env('AZURE_CLIENT_SECRET', ''),
+    userEmail: optional_env('OUTLOOK_USER_EMAIL', ''),
   },
   fathom: {
-    webhookSecret: require_env('FATHOM_WEBHOOK_SECRET'),
-    webhookPort: parseInt(optional_env('WEBHOOK_PORT', '3001'), 10),
+    apiKey: require_env('FATHOM_API_KEY'),
+    mcpServerPath: optional_env('FATHOM_MCP_SERVER_PATH', 'C:/Users/ColinDiffer/mcp-fathom-server/dist/index.js'),
   },
   anthropic: {
     apiKey: require_env('ANTHROPIC_API_KEY'),

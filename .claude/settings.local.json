@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd:*)",
+      "Bash(cd /c/Users/ColinDiffer/internal_projects/tasks_with_mcp && git branch -M main && git push -u origin main 2>&1)",
+      "Bash(cd /c/Users/ColinDiffer/internal_projects/tasks_with_mcp && npm install 2>&1)",
+      "Bash(cd /c/Users/ColinDiffer/internal_projects/tasks_with_mcp && npx tsc --noEmit 2>&1)",
+      "Bash(cd /c/Users/ColinDiffer/internal_projects/tasks_with_mcp && git push origin main 2>&1)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\(''mcpServers'', d.get\\(''mcp'', {}\\)\\), indent=2\\)\\)\")",
+      "Bash(head:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(claude mcp:*)",
+      "Bash(cd /c/Users/ColinDiffer && git clone https://github.com/sourcegate/mcp-fathom-server.git 2>&1)",
+      "Bash(cd /c/Users/ColinDiffer/mcp-fathom-server && npm install && npm run build 2>&1)",
+      "Bash(where bun 2>&1 && where bunx 2>&1)",
+      "Bash(where node && where npx 2>&1)",
+      "Bash(node:*)",
+      "Bash(tail:*)"
+    ]
+  }
+}
