@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+state/cursors.json
+state/tokens.json
+state/fathom-queue.json
+logs/*.log
