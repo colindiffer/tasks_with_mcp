@@ -25,6 +25,10 @@ function save(state: CursorState): void {
   fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), 'utf-8');
 }
 
+export function hasStoredState(): boolean {
+  return fs.existsSync(STATE_FILE);
+}
+
 export function getSlackCursor(channelId: string): string | undefined {
   return load().slack.channels[channelId];
 }

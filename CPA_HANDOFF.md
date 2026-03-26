@@ -205,6 +205,7 @@ Runtime path behavior:
 - `STATE_FILE` overrides the cursor file path directly
 - `OUTLOOK_TOKEN_FILE` overrides the Graph refresh-token file path directly
 - on Railway, set `STATE_DIR` to the attached volume mount path so cursor state and refresh-token rotations persist
+- `FIRST_RUN_LOOKBACK_HOURS` controls how much recent history is scanned when there is no persisted cursor state yet
 
 ## Required and optional credentials
 
@@ -243,6 +244,7 @@ Runtime path behavior:
 - Start command: `npm start`
 - Attach one Railway volume to the service so cursor state and Graph refresh-token rotations survive restarts
 - Set `STATE_DIR` to that volume's mount path, for example `/data`
+- Keep `FIRST_RUN_LOOKBACK_HOURS` low on fresh environments to avoid large historical backfills; current default is `2`
 - Do not use `npm run start:bg` on Railway; that script is only for local Windows background execution
 
 ## Current operational limits

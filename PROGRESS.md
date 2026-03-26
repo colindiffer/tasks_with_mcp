@@ -46,6 +46,9 @@ User token scopes: `search:read`, `im:read`, `im:history`, `mpim:read`, `mpim:hi
 ### Fathom path removed
 Meeting follow-ups should now arrive through Outlook when Fathom sends recap emails with action items.
 
+### First-run backfill guard
+Fresh environments now limit first-run ingestion to a short recent window (`FIRST_RUN_LOOKBACK_HOURS`, default `2`) until cursor state exists.
+
 ### Trello ✅
 Direct REST API. All credentials set. Cards created in CPA list.
 

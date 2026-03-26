@@ -1,6 +1,6 @@
 import fetch from 'node-fetch';
 import { config } from '../config/index.js';
-import { getTeamsChatIds, getTeamsCursor, setTeamsCursor } from '../state/store.js';
+import { getTeamsChatIds, getTeamsCursor, hasStoredState, setTeamsCursor } from '../state/store.js';
 import { withRetry } from '../utils/retry.js';
 import { logger } from '../utils/logger.js';
 import { getGraphBase, getMicrosoftGraphAccessToken, isMicrosoftGraphConfigured } from './microsoft-graph.js';
@@ -71,7 +71,9 @@ export async function fetchNewMessagesWithOptions(options?: { fullSweep?: boolea
 
   const token = await getMicrosoftGraphAccessToken();
   const graphBase = getGraphBase();
-  const sinceMs = config.backfill.since?.getTime();
+  const firstRunFloorMs = Date.now() - config.ingestion.firstRunLookbackHours * 60 * 60 * 1000;
+  const hasState = hasStoredState();
+  const sinceMs = config.backfill.since?.getTime() ?? (hasState ? undefined : firstRunFloorMs);
   const cutoffMs = config.backfill.until?.getTime();
   const knownOnly = !(options?.fullSweep ?? Boolean(config.backfill.since)) && getTeamsChatIds().length > 0;
   const messages: RawMessage[] = [];

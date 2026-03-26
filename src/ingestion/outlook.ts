@@ -1,6 +1,6 @@
 import fetch from 'node-fetch';
 import { config } from '../config/index.js';
-import { getOutlookCursor, setOutlookCursor } from '../state/store.js';
+import { getOutlookCursor, hasStoredState, setOutlookCursor } from '../state/store.js';
 import { withRetry } from '../utils/retry.js';
 import { logger } from '../utils/logger.js';
 import { getGraphBase, getMicrosoftGraphAccessToken, isMicrosoftGraphConfigured } from './microsoft-graph.js';
@@ -34,6 +34,7 @@ const SENDER_NAME_BLOCKLIST = new Set([
 ]);
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
 const DEFAULT_USER_EMAIL = 'colin@propellernet.co.uk';
 
 function getTargetUserEmail(): string {
@@ -193,12 +194,19 @@ export async function fetchNewMessages(): Promise<RawMessage[]> {
   }
 
   const cursorSince = getOutlookCursor();
+  const hasState = hasStoredState();
+  const firstRunFloorMs = Date.now() - config.ingestion.firstRunLookbackHours * HOUR_MS;
   const rollingFloorMs = Date.now() - config.ingestion.maxCatchupDays * DAY_MS;
   const effectiveSinceMs = config.backfill.since?.getTime() ?? rollingFloorMs;
   const cursorSinceMs = new Date(cursorSince).getTime();
+  const baseSinceMs = Number.isFinite(cursorSinceMs)
+    ? cursorSinceMs
+    : hasState
+      ? rollingFloorMs
+      : Math.max(rollingFloorMs, firstRunFloorMs);
   const since = new Date(
     Math.max(
-      Number.isFinite(cursorSinceMs) ? cursorSinceMs : rollingFloorMs,
+      baseSinceMs,
       effectiveSinceMs,
     ),
   ).toISOString();

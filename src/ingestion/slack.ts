@@ -1,6 +1,6 @@
 import { WebClient } from '@slack/web-api';
 import { config } from '../config/index.js';
-import { getSlackCursor, setSlackCursor } from '../state/store.js';
+import { getSlackCursor, hasStoredState, setSlackCursor } from '../state/store.js';
 import { logger } from '../utils/logger.js';
 import type { RawMessage } from '../types/index.js';
 
@@ -68,6 +68,8 @@ export async function fetchNewMessages(options?: {
 }): Promise<RawMessage[]> {
   const client = new WebClient(config.slack.accessToken);
   const messages: RawMessage[] = [];
+  const firstRunFloorMs = Date.now() - config.ingestion.firstRunLookbackHours * 60 * 60 * 1000;
+  const hasState = hasStoredState();
   const rollingFloorMs = Date.now() - config.ingestion.maxCatchupDays * DAY_MS;
   const sinceMs = config.backfill.since?.getTime() ?? rollingFloorMs;
   const cutoffMs = config.backfill.until?.getTime();
@@ -89,6 +91,13 @@ export async function fetchNewMessages(options?: {
   // --- @mentions across all channels ---
   if (includeMentions && userId) try {
     const mentionCursor = isBackfill ? undefined : getSlackCursor(MENTIONS_KEY);
+    const mentionFloorMs = isBackfill
+      ? sinceMs
+      : mentionCursor
+        ? sinceMs
+        : hasState
+          ? sinceMs
+          : Math.max(sinceMs, firstRunFloorMs);
     let newestTs: string | undefined;
     let page = 1;
     let hasMorePages = true;
@@ -114,7 +123,7 @@ export async function fetchNewMessages(options?: {
           sawOlderThanCursor = true;
           continue;
         }
-        if (sinceMs && parseFloat(ts) * 1000 < sinceMs) {
+        if (mentionFloorMs && parseFloat(ts) * 1000 < mentionFloorMs) {
           sawOlderThanCursor = true;
           continue;
         }
@@ -150,14 +159,24 @@ export async function fetchNewMessages(options?: {
 
   // --- monitored channel root posts that should always become tasks ---
   if (includeMonitorThreads) try {
-    await fetchMonitorChannelThreads(client, messages, sinceMs, cutoffMs, isBackfill);
+    const monitorFloorMs = isBackfill
+      ? sinceMs
+      : hasState
+        ? sinceMs
+        : Math.max(sinceMs, firstRunFloorMs);
+    await fetchMonitorChannelThreads(client, messages, monitorFloorMs, cutoffMs, isBackfill);
   } catch (err) {
     logger.error({ action: 'slack_monitor_threads_failed', err }, 'Failed to fetch monitored Slack channel threads');
   }
 
   // --- DMs and group DMs ---
   if (includeDms) try {
-    const lookbackFloor = Math.floor(sinceMs / 1000);
+    const dmFloorMs = isBackfill
+      ? sinceMs
+      : hasState
+        ? sinceMs
+        : Math.max(sinceMs, firstRunFloorMs);
+    const lookbackFloor = Math.floor(dmFloorMs / 1000);
     const lookbackFloorStr = String(lookbackFloor);
     const excludeList = config.slack.dmExcludeList;
     const allChannels = await listAllDmConversations(client);
@@ -430,7 +449,7 @@ async function fetchMonitorChannelThreadsFromHistory(
   const cursorKey = `${MONITOR_THREAD_CURSOR_PREFIX}${channelName}`;
   const savedCursor = isBackfill ? undefined : getSlackCursor(cursorKey);
   const rollingFloorTs = String(Math.floor((Date.now() - config.ingestion.maxCatchupDays * DAY_MS) / 1000));
-  const initialLookbackTs = String(Math.floor((Date.now() - DAY_MS) / 1000));
+  const initialLookbackTs = String(Math.floor((sinceMs ?? Date.now() - DAY_MS) / 1000));
   const oldest = isBackfill
     ? String(Math.floor((sinceMs ?? Date.now() - DAY_MS) / 1000))
     : savedCursor
@@ -519,7 +538,7 @@ async function fetchMonitorChannelThreadsViaSearch(
   const cursorKey = `${MONITOR_THREAD_CURSOR_PREFIX}${channelName}`;
   const savedCursor = isBackfill ? undefined : getSlackCursor(cursorKey);
   const rollingFloorMs = Date.now() - config.ingestion.maxCatchupDays * DAY_MS;
-  const initialLookbackMs = Date.now() - DAY_MS;
+  const initialLookbackMs = sinceMs ?? (Date.now() - DAY_MS);
   let newestTs: string | undefined;
   let page = 1;
   let hasMorePages = true;

@@ -64,10 +64,17 @@ Optional overrides:
 - `STATE_DIR`
 - `STATE_FILE`
 - `OUTLOOK_TOKEN_FILE`
+- `FIRST_RUN_LOOKBACK_HOURS`
 - `CRON_SCHEDULE`
 - `SLACK_MONITOR_CRON_SCHEDULE`
 - `SLACK_FULL_SWEEP_CRON_SCHEDULE`
 - `STARTUP_FULL_SWEEP`
+
+First-run behavior:
+
+- if CPA starts with no persisted cursor state, it now limits ingestion to a short recent window instead of scanning the full historical catch-up range
+- default first-run window: `FIRST_RUN_LOOKBACK_HOURS=2`
+- once cursor state exists, the normal catch-up behavior resumes
 
 Operating Rules
 1. System of Record

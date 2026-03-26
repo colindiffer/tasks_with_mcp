@@ -37,6 +37,7 @@ function optional_int_env(key: string, fallback: number): number {
 export const config = {
   ingestion: {
     maxCatchupDays: optional_int_env('MAX_CATCHUP_DAYS', 30),
+    firstRunLookbackHours: optional_int_env('FIRST_RUN_LOOKBACK_HOURS', 2),
   },
   slack: {
     accessToken: require_env('SLACK_ACCESS_TOKEN'),
