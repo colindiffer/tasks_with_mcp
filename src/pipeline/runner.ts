@@ -2,7 +2,7 @@ import { fetchNewMessages as fetchSlack } from '../ingestion/slack.js';
 import { fetchNewMessages as fetchOutlook } from '../ingestion/outlook.js';
 import { fetchNewMessagesWithOptions as fetchTeams } from '../ingestion/teams.js';
 import { classify } from '../classification/classifier.js';
-import { check as dedupCheck, invalidateCache } from '../dedup/deduplicator.js';
+import { check as dedupCheck, invalidateCache, registerCreatedCard } from '../dedup/deduplicator.js';
 import { loadFeedbackRules, matchesNegativeFeedback } from '../feedback/rules.js';
 import { createCard } from '../trello/client.js';
 import { matchFields } from '../trello/field-matcher.js';
@@ -220,6 +220,7 @@ async function processMessages(messages: RawMessage[], feedbackRules: Awaited<Re
       idList: config.trello.intakeListId,
       ...(result.dueDate ? { due: result.dueDate } : {}),
     });
+    registerCreatedCard(card);
 
     logger.info({
       action: 'card_created',

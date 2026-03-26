@@ -38,6 +38,21 @@ export function invalidateCache(): void {
   cacheExpiry = 0;
 }
 
+export function registerCreatedCard(card: TrelloCard): void {
+  if (!cachedCards || Date.now() >= cacheExpiry) return;
+  cachedCards = [card, ...cachedCards];
+}
+
+function findExactSourceDuplicate(candidate: TaskCandidate, existingCards: TrelloCard[]): TrelloCard | undefined {
+  const sourceIdMarker = `source-id:${candidate.raw.id}`;
+  const permalink = candidate.raw.permalink;
+
+  return existingCards.find(card =>
+    card.desc.includes(sourceIdMarker) ||
+    Boolean(permalink && card.desc.includes(permalink))
+  );
+}
+
 export async function check(candidate: TaskCandidate): Promise<DedupResult> {
   const candidateTitle = normalise(candidate.classification.actionTitle);
   const candidateSnippet = normalise(candidate.classification.originalSnippet);
@@ -51,23 +66,20 @@ export async function check(candidate: TaskCandidate): Promise<DedupResult> {
     return { decision: 'create' };
   }
 
+  const exactMatch = findExactSourceDuplicate(candidate, existingCards);
+  if (exactMatch) {
+    logger.warn({
+      action: 'dedup_skip',
+      candidateTitle: candidate.classification.actionTitle,
+      matchedCard: exactMatch.name,
+      messageId: candidate.raw.id,
+      matchedBy: 'source_identity',
+    }, 'Duplicate task detected from the same source message — skipping card creation');
+    return { decision: 'skip', matchedCardId: exactMatch.id, matchedCardName: exactMatch.name };
+  }
+
   for (const card of existingCards) {
     if (isMonitorThread) {
-      const sourceIdMarker = `source-id:${candidate.raw.id}`;
-      const samePermalink = candidate.raw.permalink && card.desc.includes(candidate.raw.permalink);
-      const sameSourceId = card.desc.includes(sourceIdMarker);
-
-      if (samePermalink || sameSourceId) {
-        logger.warn({
-          action: 'dedup_skip',
-          candidateTitle: candidate.classification.actionTitle,
-          matchedCard: card.name,
-          samePermalink: Boolean(samePermalink),
-          sameSourceId,
-        }, 'Duplicate monitor task detected — skipping card creation');
-        return { decision: 'skip', matchedCardId: card.id, matchedCardName: card.name };
-      }
-
       continue;
     }
 
