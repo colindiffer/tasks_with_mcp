@@ -21,6 +21,7 @@ function wordOverlapScore(a: string, b: string): number {
 }
 
 const SIMILARITY_THRESHOLD = 0.6;
+const SNIPPET_SIMILARITY_THRESHOLD = 0.5;
 
 let cachedCards: TrelloCard[] | null = null;
 let cacheExpiry = 0;
@@ -39,6 +40,8 @@ export function invalidateCache(): void {
 
 export async function check(candidate: TaskCandidate): Promise<DedupResult> {
   const candidateTitle = normalise(candidate.classification.actionTitle);
+  const candidateSnippet = normalise(candidate.classification.originalSnippet);
+  const isMonitorThread = candidate.raw.automation?.type === 'slack_monitor_thread';
 
   let existingCards: TrelloCard[];
   try {
@@ -49,13 +52,37 @@ export async function check(candidate: TaskCandidate): Promise<DedupResult> {
   }
 
   for (const card of existingCards) {
-    const score = wordOverlapScore(candidateTitle, normalise(card.name));
-    if (score >= SIMILARITY_THRESHOLD) {
+    if (isMonitorThread) {
+      const sourceIdMarker = `source-id:${candidate.raw.id}`;
+      const samePermalink = candidate.raw.permalink && card.desc.includes(candidate.raw.permalink);
+      const sameSourceId = card.desc.includes(sourceIdMarker);
+
+      if (samePermalink || sameSourceId) {
+        logger.warn({
+          action: 'dedup_skip',
+          candidateTitle: candidate.classification.actionTitle,
+          matchedCard: card.name,
+          samePermalink: Boolean(samePermalink),
+          sameSourceId,
+        }, 'Duplicate monitor task detected — skipping card creation');
+        return { decision: 'skip', matchedCardId: card.id, matchedCardName: card.name };
+      }
+
+      continue;
+    }
+
+    const titleScore = wordOverlapScore(candidateTitle, normalise(card.name));
+    const snippetScore = candidateSnippet
+      ? wordOverlapScore(candidateSnippet, normalise(card.desc))
+      : 0;
+
+    if (titleScore >= SIMILARITY_THRESHOLD || snippetScore >= SNIPPET_SIMILARITY_THRESHOLD) {
       logger.warn({
         action: 'dedup_skip',
         candidateTitle: candidate.classification.actionTitle,
         matchedCard: card.name,
-        score,
+        titleScore,
+        snippetScore,
       }, 'Duplicate task detected — skipping card creation');
       return { decision: 'skip', matchedCardId: card.id, matchedCardName: card.name };
     }

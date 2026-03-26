@@ -1,15 +1,14 @@
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import type { CursorState } from '../types/index.js';
+import { getCursorStateFile } from './paths.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const STATE_FILE = path.resolve(__dirname, '../../state/cursors.json');
+const STATE_FILE = getCursorStateFile();
 
 const DEFAULT_STATE: CursorState = {
   slack: { channels: {} },
-  outlook: { lastReceivedDateTime: new Date(0).toISOString() },
-  fathom: { lastProcessedMeetingDate: '' },
+  outlook: { lastReceivedDateTime: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString() },
+  teams: { chats: {} },
 };
 
 function load(): CursorState {
@@ -30,6 +29,10 @@ export function getSlackCursor(channelId: string): string | undefined {
   return load().slack.channels[channelId];
 }
 
+export function getSlackChannelIds(): string[] {
+  return Object.keys(load().slack.channels);
+}
+
 export function setSlackCursor(channelId: string, ts: string): void {
   const state = load();
   state.slack.channels[channelId] = ts;
@@ -46,12 +49,16 @@ export function setOutlookCursor(dateTime: string): void {
   save(state);
 }
 
-export function getFathomCursor(): string {
-  return load().fathom.lastProcessedMeetingDate;
+export function getTeamsCursor(chatId: string): string | undefined {
+  return load().teams.chats[chatId];
 }
 
-export function setFathomCursor(meetingDate: string): void {
+export function getTeamsChatIds(): string[] {
+  return Object.keys(load().teams.chats);
+}
+
+export function setTeamsCursor(chatId: string, dateTime: string): void {
   const state = load();
-  state.fathom.lastProcessedMeetingDate = meetingDate;
+  state.teams.chats[chatId] = dateTime;
   save(state);
 }

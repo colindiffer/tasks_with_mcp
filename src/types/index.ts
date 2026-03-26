@@ -1,4 +1,4 @@
-export type MessageSource = 'slack' | 'outlook' | 'fathom';
+export type MessageSource = 'slack' | 'outlook' | 'teams';
 
 export interface RawMessage {
   id: string;
@@ -10,17 +10,29 @@ export interface RawMessage {
   content: string;
   permalink?: string;
   threadId?: string;
+  conversationId?: string;
+  isFromSelf?: boolean;
+  automation?: {
+    type: 'slack_monitor_thread';
+    actionTitle: string;
+    requestedBy: string;
+    originalSnippet: string;
+    dueDateTime: string;
+    urgent: boolean;
+    ruleNote: string;
+  };
 }
 
 export type ConfidenceLevel = 'high' | 'medium' | 'low';
 
 export interface ClassificationResult {
   isTask: boolean;
+  isPersonal: boolean;
   confidence: ConfidenceLevel;
   actionTitle: string;       // Short imperative title, max 80 chars
   requestedBy: string;
   originalSnippet: string;   // Exact quote from message, max 300 chars
-  dueDate?: string;          // ISO date YYYY-MM-DD — only if explicitly stated
+  dueDate?: string;          // ISO date/date-time — only if explicitly stated or rule-configured
   reasoning: string;         // One sentence explanation for logs/audit
 }
 
@@ -59,7 +71,7 @@ export interface CursorState {
   outlook: {
     lastReceivedDateTime: string; // ISO datetime
   };
-  fathom: {
-    lastProcessedMeetingDate: string; // ISO datetime of most recent processed meeting
+  teams: {
+    chats: Record<string, string>; // chatId -> last message datetime
   };
 }
